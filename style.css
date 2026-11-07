@@ -21,6 +21,8 @@ pre{white-space:pre-wrap}
 
 /* ---------- 侧栏 ---------- */
 #nav{width:190px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;gap:4px;background:#0d0d0d}
+.logo{display:flex;align-items:center;gap:11px}
+.logo-ico{flex:0 0 auto}
 .logo-main{font-size:22px;font-weight:700;letter-spacing:4px}
 .logo-sub{font:10px/1.6 var(--mono);color:var(--faint);letter-spacing:2px;margin-bottom:18px}
 .navbtn{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:1px solid transparent;border-radius:8px;padding:10px 12px;font-size:15px;letter-spacing:2px;color:var(--dim)}
