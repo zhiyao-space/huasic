@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>画串工坊 · Artist String Lab</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="nav">
+    <div class="logo">
+      <div class="logo-main">画串工坊</div>
+      <div class="logo-sub">ARTIST STRING LAB</div>
+    </div>
+    <nav id="navBtns">
+      <button class="navbtn on" data-page="library">画师库 <span class="navhint" id="navLibCount"></span></button>
+      <button class="navbtn" data-page="mixer">调串台 <span class="navhint" id="navSelCount"></span></button>
+      <button class="navbtn" data-page="records">画串录 <span class="navhint" id="navRecCount"></span></button>
+      <button class="navbtn" data-page="settings">API 设置</button>
+    </nav>
+    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261107d-models</span></div>
+  </aside>
+
+  <main id="main">
+
+    <!-- ============ 画师库 ============ -->
+    <section id="page-library" class="page on">
+      <header class="phead">
+        <h1>画师库</h1>
+        <p class="sub">Danbooru 画师串 × 画风分类 · 点击加入调串台</p>
+      </header>
+      <div class="toolbar">
+        <input id="libQ" class="grow" placeholder="搜索画师串 / 画风 / 描述…">
+        <select id="libCat"><option value="">全部分类</option></select>
+        <select id="libSort">
+          <option value="hot">按热度</option>
+          <option value="az">按名称</option>
+          <option value="rand">随机</option>
+        </select>
+        <button id="btnImport" class="btn ghost">导入</button>
+      </div>
+      <div id="libChips" class="chips"></div>
+      <div id="libGrid" class="agrid"></div>
+      <button id="libMore" class="btn ghost wide">加载更多</button>
+    </section>
+
+    <!-- ============ 调串台 ============ -->
+    <section id="page-mixer" class="page">
+      <header class="phead">
+        <h1>调串台</h1>
+        <p class="sub">调节权重 → Novel 格式输出 → 生成测试图 → 自动存入画串录</p>
+      </header>
+      <div class="mixer-grid">
+        <div class="mcol">
+          <div class="panel">
+            <div class="prow"><h2>已选画师串 <span id="selN" class="dim"></span></h2>
+              <span><button id="selShuffle" class="mini">随机序</button> <button id="selClear" class="mini">清空</button></span></div>
+            <div id="selList" class="sellist"></div>
+            <div class="prow mt">
+              <button id="copyStr" class="btn">复制画师串</button>
+              <button id="copyFull" class="btn ghost">复制完整提示词</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>随机调和</h2>
+            <div class="frow4">
+              <label>次数<input id="rTimes" type="number" min="1" max="50" value="3"></label>
+              <label>最少<input id="rMin" type="number" min="1" max="20" value="2"></label>
+              <label>最多<input id="rMax" type="number" min="1" max="20" value="4"></label>
+            </div>
+            <div class="frow4">
+              <label>权重低<input id="rWmin" type="number" step="0.05" min="0.1" max="2" value="0.6"></label>
+              <label>权重高<input id="rWmax" type="number" step="0.05" min="0.1" max="2" value="1.4"></label>
+              <label>来源
+                <select id="rSrc">
+                  <option value="filter">当前筛选</option>
+                  <option value="all">全库</option>
+                  <option value="sel">已选</option>
+                </select>
+              </label>
+            </div>
+            <div class="frow">
+              <label class="check"><input id="rAuto" type="checkbox"> 逐条自动生成图片</label>
+            </div>
+            <button id="btnRandom" class="btn wide">开始调和</button>
+            <div id="randOut" class="randout"></div>
+          </div>
+        </div>
+
+        <div class="mcol">
+          <div class="panel">
+            <h2>权重格式</h2>
+            <div class="frow">
+              <select id="fTpl">
+                <option value="artist:{tag}:{w}">Novel: artist:{tag}:{w}</option>
+                <option value="artist:{tag}">Novel: artist:{tag}（无权重）</option>
+                <option value="({tag}:{w})">SD: ({tag}:{w})</option>
+                <option value="{tag}">纯标签: {tag}</option>
+                <option value="__custom__">自定义模板…</option>
+              </select>
+              <input id="fCustom" placeholder='自定义模板 {tag} {w}' class="hide">
+              <label>小数
+                <select id="fDec"><option value="1">1</option><option value="2">2</option></select>
+              </label>
+            </div>
+            <div class="frow">
+              <label class="check"><input id="fOmit" type="checkbox"> 权重为 1 时省略</label>
+              <label class="check"><input id="fSortW" type="checkbox" checked> 按权重降序</label>
+            </div>
+            <pre id="fmtPrev" class="codewrap"></pre>
+          </div>
+
+          <div class="panel">
+            <h2>提示词</h2>
+            <textarea id="inPrompt" rows="4" placeholder="正面提示词，如：1girl, silver hair, looking at viewer, night city"></textarea>
+            <textarea id="inNegative" rows="3" placeholder="负面提示词，如：lowres, bad anatomy, watermark"></textarea>
+            <div class="frow4">
+              <label>尺寸
+                <select id="inSize">
+                  <option value="1024x1024">1024 × 1024</option>
+                  <option value="832x1216">832 × 1216</option>
+                  <option value="1216x832">1216 × 832</option>
+                  <option value="1024x1536">1024 × 1536</option>
+                  <option value="1536x1024">1536 × 1024</option>
+                </select>
+              </label>
+              <label class="grow">固定前置<input id="inPrefix" placeholder="masterpiece, best quality"></label>
+            </div>
+            <div class="prow mt">
+              <button id="btnGen" class="btn wide">生成测试图片</button>
+            </div>
+            <div id="genStatus" class="status"></div>
+            <div id="genResult" class="genresult"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 画串录 ============ -->
+    <section id="page-records" class="page">
+      <header class="phead">
+        <h1>画串录</h1>
+        <p class="sub">调和的画师串 × 实测画风图片（本地 IndexedDB）</p>
+      </header>
+      <div class="toolbar">
+        <input id="recQ" class="grow" placeholder="搜索画师串 / 提示词…">
+        <span class="dim" id="recCount"></span>
+        <button id="recClear" class="btn ghost">清空全部</button>
+      </div>
+      <div id="recGrid" class="rgrid"></div>
+      <div id="recEmpty" class="empty hide">还没有记录 —— 去调串台生成第一张测试图</div>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section id="page-settings" class="page">
+      <header class="phead">
+        <h1>API 设置</h1>
+        <p class="sub">支持中转站（OpenAI 兼容）/ NovelAI 官方或中转 / SD WebUI</p>
+      </header>
+      <div class="panel">
+        <h2>接口类型</h2>
+        <div class="frow">
+          <select id="stProvider">
+            <option value="openai">中转站 · OpenAI 兼容 /v1/images/generations</option>
+            <option value="nai">NovelAI 官方 / 中转 /ai/generate-image</option>
+            <option value="sd">SD WebUI /sdapi/v1/txt2img</option>
+          </select>
+        </div>
+        <div class="frow">
+          <label class="grow">API 地址 Base URL<input id="stBase" placeholder="https://your-relay.example.com"></label>
+          <label class="grow">API Key<input id="stKey" type="password" placeholder="sk-… / NAI token（本地保存）"></label>
+        </div>
+        <div class="frow">
+          <label class="grow">模型<input id="stModel" placeholder="nai-diffusion-3 / flux.1-schnell …"></label>
+          <select id="stModelSel" class="hide grow"></select>
+          <button id="btnModels" class="btn ghost">获取模型</button>
+          <label>步数 Steps<input id="stSteps" type="number" min="1" max="60" value="28"></label>
+          <label>引导 Scale / CFG<input id="stScale" type="number" step="0.5" min="1" max="30" value="6"></label>
+        </div>
+        <div class="status" id="modelsStatus"></div>
+        <div class="frow">
+          <label>采样器<input id="stSampler" placeholder="k_euler_ana / DPM++ 2M"></label>
+          <label>Seed<input id="stSeed" placeholder="留空随机"></label>
+          <label class="check"><input id="stAutoSave" type="checkbox" checked> 生成成功自动存入画串录</label>
+        </div>
+        <div class="prow mt">
+          <button id="btnTest" class="btn ghost">保存并试连</button>
+          <span class="status" id="testStatus"></span>
+        </div>
+        <p class="note">提示：纯前端直连，若浏览器提示 CORS 跨域失败，请改用支持 CORS 的中转站，或本地反向代理转发。试连会消耗一次生成额度。</p>
+      </div>
+
+      <div class="panel">
+        <h2>画师串数据</h2>
+        <p class="note">内置 16000+ Danbooru 画师串（含投稿热度）。可再导入：TXT（每行一个）/ CSV（画师串,分类,概意）/ JSON（[{tag,cat,desc,n}]）/ 在线拉取 Danbooru。</p>
+        <div class="prow mt">
+          <button id="btnPullDanbooru" class="btn ghost">在线拉取 Danbooru Top1000</button>
+          <button id="btnExport" class="btn ghost">导出导入数据</button>
+          <button id="btnWipeCustom" class="btn ghost">清空自定义导入</button>
+        </div>
+        <div class="status" id="importStatus"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 导入弹窗 -->
+<div id="modal" class="modal hide">
+  <div class="mbox">
+    <div class="prow"><h2>导入画师串</h2><button id="modalClose" class="mini">关闭</button></div>
+    <textarea id="impText" rows="10" placeholder="每行一个画师串；或 CSV：画师串,分类,概意；或 JSON 数组"></textarea>
+    <div class="prow mt">
+      <label class="btn ghost filebtn">选择文件<input id="impFile" type="file" accept=".txt,.csv,.json" hidden></label>
+      <button id="impGo" class="btn">解析并导入</button>
+    </div>
+    <p class="note">导入数据与内置库合并，同名画师串以导入的分类/概意为准。</p>
+  </div>
+</div>
+
+<div id="toast" class="toast hide"></div>
+<div id="lightbox" class="lightbox hide"><div class="lbbox"><img id="lbImg" alt=""><pre id="lbStr" class="codewrap"></pre><button id="lbClose" class="btn">关闭</button></div></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
