@@ -26,7 +26,7 @@
       <button class="navbtn" data-page="records">画串录 <span class="navhint" id="navRecCount"></span></button>
       <button class="navbtn" data-page="settings">API 设置</button>
     </nav>
-    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261108b-aitag</span></div>
+    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261108c-mirror</span></div>
   </aside>
 
   <main id="main">
@@ -197,6 +197,9 @@
           <label class="grow">对话模型（「AI 标画风」用，填中转站里的聊天模型）<input id="stChatModel" placeholder="gpt-4o-mini / gemini-2.0-flash / deepseek-chat …"></label>
         </div>
         <div class="frow">
+          <label class="grow">Danbooru 镜像地址（看作品 / 缩略图 / 拉取用；官方域名被墙时填可用的反代）<input id="stMirror" placeholder="https://danbooru.donmai.us"></label>
+        </div>
+        <div class="frow">
           <label>采样器<input id="stSampler" placeholder="k_euler_ana / DPM++ 2M"></label>
           <label>Seed<input id="stSeed" placeholder="留空随机"></label>
           <label class="check"><input id="stAutoSave" type="checkbox" checked> 生成成功自动存入画串录</label>
@@ -242,6 +245,8 @@
     <p class="note" id="editTag" style="font-weight:700;font-size:15px"></p>
     <label class="frow">画风分类<select id="editCat"></select></label>
     <label class="frow">画风概意<input id="editDesc" placeholder="如：清透水感上色、安静少女氛围"></label>
+    <div id="editPrev" class="thumbs"></div>
+    <p class="note" id="editPrevNote"></p>
     <div class="prow mt">
       <button id="editSave" class="btn">保存</button>
       <a id="editView" class="btn ghost" target="_blank" rel="noopener">看作品 ↗</a>

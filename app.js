@@ -122,7 +122,7 @@ function renderLibrary() {
     const unknown = a.c === '其他风格' || !a.c;
     const desc = unknown ? '点「看作品」查看实际画风；「标画风」手动归类或让 AI 批量标注' : (a.d || '');
     const extra = unknown ? `
-        <a class="mini" href="https://danbooru.donmai.us/posts?tags=${encodeURIComponent(a.t)}" target="_blank" rel="noopener">看作品</a>
+        <a class="mini" href="${esc(danbooruBase() + '/posts?tags=' + encodeURIComponent(a.t))}" target="_blank" rel="noopener">看作品</a>
         <button class="mini" data-edit="${esc(a.t)}">标画风</button>` : '';
     return `
     <div class="acard">
@@ -530,10 +530,11 @@ function bindSettings() {
   $('#stModel').value = st.model; $('#stSteps').value = st.steps; $('#stScale').value = st.scale;
   $('#stSampler').value = st.sampler; $('#stSeed').value = st.seed; $('#stAutoSave').checked = !!st.autoSave;
   $('#stChatModel').value = st.chatModel || '';
+  $('#stMirror').value = st.mirror || '';
   $('#inPrefix').value = st.prefix || '';
   $('#inPrompt').value = S.prompt; $('#inNegative').value = S.negative;
 }
-['stProvider','stBase','stKey','stModel','stSteps','stScale','stSampler','stSeed','stAutoSave','stChatModel'].forEach(id => {
+['stProvider','stBase','stKey','stModel','stSteps','stScale','stSampler','stSeed','stAutoSave','stChatModel','stMirror'].forEach(id => {
   $('#' + id).addEventListener('input', saveSettings);
   $('#' + id).addEventListener('change', saveSettings);
 });
@@ -543,7 +544,7 @@ function saveSettings() {
     provider: $('#stProvider').value, base: $('#stBase').value.trim(), key: $('#stKey').value.trim(),
     model: $('#stModel').value.trim(), steps: +$('#stSteps').value || 28, scale: +$('#stScale').value || 6,
     sampler: $('#stSampler').value.trim(), seed: $('#stSeed').value.trim(), autoSave: $('#stAutoSave').checked,
-    chatModel: $('#stChatModel').value.trim()
+    chatModel: $('#stChatModel').value.trim(), mirror: $('#stMirror').value.trim()
   };
   saveLS('asl_settings', S.settings);
 }
@@ -627,16 +628,43 @@ $('#btnImport').addEventListener('click', () => $('#modal').classList.remove('hi
 $('#modalClose').addEventListener('click', () => $('#modal').classList.add('hide'));
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').classList.add('hide'); });
 
+/* ================= Danbooru 镜像 ================= */
+function danbooruBase() { return (S.settings.mirror || 'https://danbooru.donmai.us').trim().replace(/\/+$/, ''); }
+function rewriteCdn(u) {
+  if (!u) return u;
+  const base = danbooruBase();
+  if (/^https?:\/\/cdn\.donmai\.us\//.test(u) && base !== 'https://danbooru.donmai.us') return u.replace(/^https?:\/\/cdn\.donmai\.us\//, base + '/');
+  return u;
+}
+
 /* ================= 手动标注画风 ================= */
 let editCur = '';
+async function loadPrev(t) {
+  const box = $('#editPrev'), note = $('#editPrevNote');
+  box.innerHTML = ''; note.textContent = '缩略图加载中…';
+  try {
+    const r = await fetch(danbooruBase() + '/posts.json?tags=' + encodeURIComponent(t) + '+order%3Ascore&limit=4');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const posts = await r.json();
+    const imgs = posts.filter(p => p.preview_file_url).slice(0, 4);
+    if (!imgs.length) { note.textContent = '该画师暂无可预览作品'; return; }
+    note.textContent = '实际画风预览（点击大图看原帖）';
+    box.innerHTML = imgs.map(p => `<a href="${esc(p.large_file_url || p.file_url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(rewriteCdn(p.preview_file_url))}" alt=""></a>`).join('');
+    box.querySelectorAll('img').forEach((im, i) => {
+      im.addEventListener('error', () => { const rw = rewriteCdn(imgs[i] && imgs[i].preview_file_url); if (im.src !== rw && rw) im.src = rw; else im.parentElement.remove(); if (!box.querySelector('img')) note.textContent = '缩略图加载失败：镜像不代理图片时可在设置里换镜像'; });
+    });
+  } catch (e) { note.textContent = '预览失败（' + e.message + '）：镜像不可达或网络受限，可在 API 设置里更换 Danbooru 镜像地址'; }
+}
 function openEdit(t) {
   const a = S.artists.find(x => x.t === t) || { t, c: '', d: '' };
   editCur = t;
   $('#editTag').textContent = t;
   $('#editCat').value = (!a.c || a.c === '其他风格') ? '' : a.c;
   $('#editDesc').value = (a.d || '').includes('实测观察') ? '' : (a.d || '');
-  $('#editView').href = 'https://danbooru.donmai.us/posts?tags=' + encodeURIComponent(t);
+  $('#editView').href = danbooruBase() + '/posts?tags=' + encodeURIComponent(t);
   $('#editModal').classList.remove('hide');
+  $('#editPrev').innerHTML = ''; $('#editPrevNote').textContent = '';
+  loadPrev(t);
 }
 $('#editClose').addEventListener('click', () => $('#editModal').classList.add('hide'));
 $('#editModal').addEventListener('click', e => { if (e.target.id === 'editModal') $('#editModal').classList.add('hide'); });
@@ -760,7 +788,7 @@ function parseImport(raw) {
 $('#btnPullDanbooru').addEventListener('click', async () => {
   const el = $('#importStatus'); el.innerHTML = '<span class="spin"></span>拉取中…';
   try {
-    const r = await fetch('https://danbooru.donmai.us/tags.json?search[category]=1&search[order]=count&limit=1000&page=1');
+    const r = await fetch(danbooruBase() + '/tags.json?search[category]=1&search[order]=count&limit=1000&page=1');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const tags = await r.json();
     const map = new Map(S.custom.map(c => [c.t, c]));
