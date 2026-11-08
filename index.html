@@ -26,7 +26,7 @@
       <button class="navbtn" data-page="records">画串录 <span class="navhint" id="navRecCount"></span></button>
       <button class="navbtn" data-page="settings">API 设置</button>
     </nav>
-    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261108a-style</span></div>
+    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261108b-aitag</span></div>
   </aside>
 
   <main id="main">
@@ -45,6 +45,7 @@
           <option value="az">按名称</option>
           <option value="rand">随机</option>
         </select>
+        <button id="btnAiTag" class="btn ghost">AI 标画风</button>
         <button id="btnImport" class="btn ghost">导入</button>
       </div>
       <div id="libChips" class="chips"></div>
@@ -193,6 +194,9 @@
         </div>
         <div class="status" id="modelsStatus"></div>
         <div class="frow">
+          <label class="grow">对话模型（「AI 标画风」用，填中转站里的聊天模型）<input id="stChatModel" placeholder="gpt-4o-mini / gemini-2.0-flash / deepseek-chat …"></label>
+        </div>
+        <div class="frow">
           <label>采样器<input id="stSampler" placeholder="k_euler_ana / DPM++ 2M"></label>
           <label>Seed<input id="stSeed" placeholder="留空随机"></label>
           <label class="check"><input id="stAutoSave" type="checkbox" checked> 生成成功自动存入画串录</label>
@@ -228,6 +232,34 @@
       <button id="impGo" class="btn">解析并导入</button>
     </div>
     <p class="note">导入数据与内置库合并，同名画师串以导入的分类/概意为准。</p>
+  </div>
+</div>
+
+<!-- 标注画风弹窗 -->
+<div id="editModal" class="modal hide">
+  <div class="mbox">
+    <div class="prow"><h2>标注画风</h2><button id="editClose" class="mini">关闭</button></div>
+    <p class="note" id="editTag" style="font-weight:700;font-size:15px"></p>
+    <label class="frow">画风分类<select id="editCat"></select></label>
+    <label class="frow">画风概意<input id="editDesc" placeholder="如：清透水感上色、安静少女氛围"></label>
+    <div class="prow mt">
+      <button id="editSave" class="btn">保存</button>
+      <a id="editView" class="btn ghost" target="_blank" rel="noopener">看作品 ↗</a>
+    </div>
+  </div>
+</div>
+
+<!-- AI 标画风弹窗 -->
+<div id="aiModal" class="modal hide">
+  <div class="mbox">
+    <div class="prow"><h2>AI 标画风</h2><button id="aiClose" class="mini">关闭</button></div>
+    <p class="note">用中转站的<b>对话模型</b>给未分类画师串自动写画风分类和概意。先在 API 设置填好地址和密钥，再填一个聊天模型（gpt-4o-mini / gemini-2.0-flash 等，注意不是画图模型）。标注结果会合并进画师库，可用于画风定向随机。</p>
+    <div class="frow">
+      <label>本轮数量<input id="aiCount" type="number" min="5" max="100" value="30"></label>
+      <label class="grow">对话模型<input id="aiModel" placeholder="gpt-4o-mini …"></label>
+    </div>
+    <div class="prow mt"><button id="aiGo" class="btn">开始识别</button></div>
+    <p class="note" id="aiStatus"></p>
   </div>
 </div>
 

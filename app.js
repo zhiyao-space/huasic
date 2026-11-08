@@ -118,22 +118,32 @@ $('#libChips').addEventListener('click', e => {
 function renderLibrary() {
   const arr = filtered();
   const slice = arr.slice(0, libShown);
-  $('#libGrid').innerHTML = slice.map(a => `
+  $('#libGrid').innerHTML = slice.map(a => {
+    const unknown = a.c === '其他风格' || !a.c;
+    const desc = unknown ? '点「看作品」查看实际画风；「标画风」手动归类或让 AI 批量标注' : (a.d || '');
+    const extra = unknown ? `
+        <a class="mini" href="https://danbooru.donmai.us/posts?tags=${encodeURIComponent(a.t)}" target="_blank" rel="noopener">看作品</a>
+        <button class="mini" data-edit="${esc(a.t)}">标画风</button>` : '';
+    return `
     <div class="acard">
       <div class="meta"><span class="badge">${esc(a.c)}</span><span class="hot">${a.n != null ? a.n + ' posts' : '自定义'}</span></div>
       <div class="tag">${esc(a.t)}</div>
-      <div class="desc">${esc(a.d || '')}</div>
+      <div class="desc">${esc(desc)}</div>
       <div class="foot">
         <span class="faint" style="font-size:11px">${inSel(a.t) ? '已加入' : ''}</span>
+        ${extra}
         <button class="mini" data-add="${esc(a.t)}">${inSel(a.t) ? '重新加入' : '+ 加入调串'}</button>
       </div>
-    </div>`).join('') || '<div class="empty">没有匹配的画师串</div>';
+    </div>`;
+  }).join('') || '<div class="empty">没有匹配的画师串</div>';
   $('#libMore').style.display = arr.length > libShown ? '' : 'none';
   $('#libMore').textContent = `加载更多（${libShown}/${arr.length}）`;
 }
 $('#libGrid').addEventListener('click', e => {
-  const b = e.target.closest('[data-add]'); if (!b) return;
-  addSel(b.dataset.add, 1); toast('已加入调串台：' + b.dataset.add);
+  const b = e.target.closest('[data-add]');
+  if (b) { addSel(b.dataset.add, 1); toast('已加入调串台：' + b.dataset.add); return; }
+  const eb = e.target.closest('[data-edit]');
+  if (eb) openEdit(eb.dataset.edit);
 });
 $('#libMore').addEventListener('click', () => { libShown += PAGE_SIZE; renderLibrary(); });
 $('#libQ').addEventListener('input', e => { S.filter.q = e.target.value.trim(); libShown = PAGE_SIZE; renderLibrary(); });
@@ -519,10 +529,11 @@ function bindSettings() {
   $('#stProvider').value = st.provider; $('#stBase').value = st.base; $('#stKey').value = st.key;
   $('#stModel').value = st.model; $('#stSteps').value = st.steps; $('#stScale').value = st.scale;
   $('#stSampler').value = st.sampler; $('#stSeed').value = st.seed; $('#stAutoSave').checked = !!st.autoSave;
+  $('#stChatModel').value = st.chatModel || '';
   $('#inPrefix').value = st.prefix || '';
   $('#inPrompt').value = S.prompt; $('#inNegative').value = S.negative;
 }
-['stProvider','stBase','stKey','stModel','stSteps','stScale','stSampler','stSeed','stAutoSave'].forEach(id => {
+['stProvider','stBase','stKey','stModel','stSteps','stScale','stSampler','stSeed','stAutoSave','stChatModel'].forEach(id => {
   $('#' + id).addEventListener('input', saveSettings);
   $('#' + id).addEventListener('change', saveSettings);
 });
@@ -531,7 +542,8 @@ function saveSettings() {
     ...S.settings,
     provider: $('#stProvider').value, base: $('#stBase').value.trim(), key: $('#stKey').value.trim(),
     model: $('#stModel').value.trim(), steps: +$('#stSteps').value || 28, scale: +$('#stScale').value || 6,
-    sampler: $('#stSampler').value.trim(), seed: $('#stSeed').value.trim(), autoSave: $('#stAutoSave').checked
+    sampler: $('#stSampler').value.trim(), seed: $('#stSeed').value.trim(), autoSave: $('#stAutoSave').checked,
+    chatModel: $('#stChatModel').value.trim()
   };
   saveLS('asl_settings', S.settings);
 }
@@ -614,6 +626,88 @@ $('#btnModels').addEventListener('click', async () => {
 $('#btnImport').addEventListener('click', () => $('#modal').classList.remove('hide'));
 $('#modalClose').addEventListener('click', () => $('#modal').classList.add('hide'));
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').classList.add('hide'); });
+
+/* ================= 手动标注画风 ================= */
+let editCur = '';
+function openEdit(t) {
+  const a = S.artists.find(x => x.t === t) || { t, c: '', d: '' };
+  editCur = t;
+  $('#editTag').textContent = t;
+  $('#editCat').value = (!a.c || a.c === '其他风格') ? '' : a.c;
+  $('#editDesc').value = (a.d || '').includes('实测观察') ? '' : (a.d || '');
+  $('#editView').href = 'https://danbooru.donmai.us/posts?tags=' + encodeURIComponent(t);
+  $('#editModal').classList.remove('hide');
+}
+$('#editClose').addEventListener('click', () => $('#editModal').classList.add('hide'));
+$('#editModal').addEventListener('click', e => { if (e.target.id === 'editModal') $('#editModal').classList.add('hide'); });
+$('#editSave').addEventListener('click', () => {
+  const cat = $('#editCat').value || '其他风格', desc = $('#editDesc').value.trim();
+  parseImport(JSON.stringify([{ t: editCur, c: cat, d: desc }]));
+  mergeArtists(); renderChips(); renderLibrary(); updateNav();
+  $('#editModal').classList.add('hide');
+  toast('已标注：' + editCur);
+});
+
+/* ================= AI 批量标画风 ================= */
+async function aiClassify(lines, model) {
+  const st = S.settings;
+  let base = (st.base || '').trim().replace(/\/+$/, '');
+  if (!base) throw new Error('请先在 API 设置填写中转站地址');
+  if (!/^https?:\/\//.test(base)) throw new Error('地址需以 http(s):// 开头');
+  if (!/\/v\d+$/.test(base)) base += '/v1';
+  const cats = (window.ARTIST_CATS || []).join('、');
+  const prompt = '你是动漫插画风格专家。下面每行是 Danbooru 画师标签|投稿数。为每个画师从这些分类中选最贴近的一个：' + cats +
+    '。并用不超过18个中文字概括其画风特点。只输出 JSON 数组，格式 [{"t":"画师名","c":"分类","d":"画风概意"}]，不要输出任何其他文字。\n' + lines.join('\n');
+  let r;
+  try {
+    r = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (st.key || '') },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.2 })
+    });
+  } catch (e) { throw new Error('网络/CORS 失败：' + e.message + '（中转站需支持 chat/completions 且允许跨域）'); }
+  if (!r.ok) throw new Error(`HTTP ${r.status}：${(await r.text().catch(() => '')).slice(0, 160)}`);
+  const j = await r.json();
+  let txt = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  txt = txt.replace(/```json|```/g, '').trim();
+  const m = txt.match(/\[[\s\S]*\]/);
+  if (!m) throw new Error('模型未返回 JSON 数组（请确认填的是对话模型而非画图模型）');
+  return JSON.parse(m[0]);
+}
+$('#btnAiTag').addEventListener('click', () => {
+  const unknown = S.artists.filter(a => a.c === '其他风格' || !a.c).length;
+  $('#aiModel').value = S.settings.chatModel || '';
+  $('#aiStatus').textContent = `当前未分类画师串共 ${unknown} 个，每轮按投稿量从高到低取`;
+  $('#aiModal').classList.remove('hide');
+});
+$('#aiClose').addEventListener('click', () => $('#aiModal').classList.add('hide'));
+$('#aiModal').addEventListener('click', e => { if (e.target.id === 'aiModal') $('#aiModal').classList.add('hide'); });
+$('#aiGo').addEventListener('click', async () => {
+  const el = $('#aiStatus');
+  const n = Math.max(5, Math.min(100, +$('#aiCount').value || 30));
+  const model = $('#aiModel').value.trim();
+  if (!model) { el.textContent = '请先填对话模型（聊天模型，不是画图模型）'; return; }
+  S.settings.chatModel = model; saveLS('asl_settings', S.settings);
+  const unknown = S.artists.filter(a => a.c === '其他风格' || !a.c)
+    .sort((x, y) => (y.n || 0) - (x.n || 0)).slice(0, n);
+  if (!unknown.length) { el.textContent = '没有未分类画师串了'; return; }
+  el.innerHTML = '<span class="spin"></span>识别中…（' + unknown.length + ' 个）';
+  $('#aiGo').disabled = true;
+  try {
+    const arr = await aiClassify(unknown.map(a => `${a.t}|${a.n != null ? a.n : ''}`), model);
+    if (!Array.isArray(arr)) throw new Error('返回格式不对');
+    const cats = window.ARTIST_CATS || [];
+    const list = arr.filter(x => x && x.t).map(x => ({
+      t: String(x.t), c: cats.includes(x.c) ? x.c : '', d: String(x.d || '').slice(0, 40)
+    }));
+    if (!list.length) throw new Error('模型没有返回有效条目');
+    const cnt = parseImport(JSON.stringify(list));
+    mergeArtists(); renderChips(); renderLibrary(); updateNav();
+    el.textContent = `完成：本轮标注 ${cnt} 个，剩余 ${S.artists.filter(a => a.c === '其他风格' || !a.c).length} 个未分类。可继续下一轮`;
+    toast('AI 标画风完成');
+  } catch (e) { el.textContent = '失败：' + e.message; }
+  $('#aiGo').disabled = false;
+});
 $('#impFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   $('#impText').value = await f.text();
@@ -709,6 +803,8 @@ $('#libCat').innerHTML = '<option value="">全部分类</option>' +
   (window.ARTIST_CATS || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 renderChips();
 $('#rStyle').innerHTML = '<option value="">不限</option>' +
+  (window.ARTIST_CATS || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+$('#editCat').innerHTML = '<option value="">其他风格（不归类）</option>' +
   (window.ARTIST_CATS || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 renderLibrary();
 bindFmt(); bindRnd(); bindSettings();
