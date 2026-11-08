@@ -211,23 +211,31 @@ function bindRnd() {
   $('#rTimes').value = r.times ?? 3; $('#rMin').value = r.min ?? 2; $('#rMax').value = r.max ?? 4;
   $('#rWmin').value = r.wmin ?? 0.6; $('#rWmax').value = r.wmax ?? 1.4;
   $('#rSrc').value = r.src || 'filter'; $('#rAuto').checked = !!r.auto;
+  $('#rStyle').value = r.style || ''; $('#rKey').value = r.key || '';
   $('#randOut').innerHTML = '';
 }
 function saveRnd() {
   S.rnd = { times: +$('#rTimes').value, min: +$('#rMin').value, max: +$('#rMax').value,
-    wmin: +$('#rWmin').value, wmax: +$('#rWmax').value, src: $('#rSrc').value, auto: $('#rAuto').checked };
+    wmin: +$('#rWmin').value, wmax: +$('#rWmax').value, src: $('#rSrc').value,
+    style: $('#rStyle').value, key: $('#rKey').value.trim(), auto: $('#rAuto').checked };
   saveLS('asl_rnd', S.rnd);
 }
 function randomPool() {
-  const src = $('#rSrc').value;
-  if (src === 'sel') return S.sel.map(s => s.t);
-  if (src === 'all') return S.artists.map(a => a.t);
-  return filtered().map(a => a.t);
+  const style = $('#rStyle').value, key = $('#rKey').value.trim().toLowerCase();
+  let base;
+  if (style || key) base = S.artists;   // 画风/关键词定向：全库匹配，优先于来源
+  else if ($('#rSrc').value === 'sel') base = S.sel.map(s => S.artists.find(a => a.t === s.t) || { t: s.t, c: '', d: '' });
+  else if ($('#rSrc').value === 'all') base = S.artists;
+  else base = filtered();
+  if (style) base = base.filter(a => a.c === style);
+  if (key) base = base.filter(a =>
+    a.t.toLowerCase().includes(key) || (a.c || '').toLowerCase().includes(key) || (a.d || '').toLowerCase().includes(key));
+  return base;
 }
 $('#btnRandom').addEventListener('click', async () => {
   saveRnd();
-  const pool = [...new Set(randomPool())];
-  if (pool.length < 2) return toast('来源池太小，换个筛选或来源');
+  const pool = [...new Set(randomPool().map(a => a.t))];
+  if (pool.length < 2) return toast('来源池太小：换个画风定向/关键词，或清空筛选');
   const n = Math.min(50, Math.max(1, S.rnd.times));
   const lo = Math.max(1, Math.min(S.rnd.min, S.rnd.max));
   const hi = Math.min(pool.length, Math.max(S.rnd.min, S.rnd.max));
@@ -241,7 +249,7 @@ $('#btnRandom').addEventListener('click', async () => {
       .map(t => ({ t, w: Math.round(rand(wlo, whi) / step) * step }));
     results.push({ tags: picked, str: buildStr(picked) });
   }
-  renderRand(results);
+  renderRand(results, { pool: pool.length, style: $('#rStyle').value, key: $('#rKey').value.trim() });
   if (S.rnd.auto) {
     const btn = $('#btnRandom'); btn.disabled = true;
     for (let i = 0; i < results.length; i++) {
@@ -252,10 +260,17 @@ $('#btnRandom').addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
-function renderRand(results) {
-  $('#randOut').innerHTML = results.map((r, i) => `
+function catOf(t) { const a = S.artists.find(x => x.t === t); return (a && a.c) || ''; }
+function renderRand(results, meta) {
+  const tag = [];
+  if (meta.style) tag.push('画风：' + meta.style);
+  if (meta.key) tag.push('关键词：' + meta.key);
+  $('#randOut').innerHTML = `<div class="rnum">来源池 ${meta.pool} 个画师串${tag.length ? ' · ' + esc(tag.join(' · ')) : ''}</div>` +
+    results.map((r, i) => {
+      const cats = [...new Set(r.tags.map(x => catOf(x.t)).filter(Boolean))].join(' + ');
+      return `
     <div class="randitem" data-i="${i}">
-      <div class="rnum">#${i + 1} · ${r.tags.length} 个画师串 · 权重 ${r.tags.map(x => fmtW(x.w)).join('/')}</div>
+      <div class="rnum">#${i + 1} · ${r.tags.length} 个画师串 · 权重 ${r.tags.map(x => fmtW(x.w)).join('/')}${cats ? ' · ' + esc(cats) : ''}</div>
       <pre class="codewrap">${esc(r.str)}</pre>
       <div class="rfoot">
         <button class="mini" data-rc="${i}">复制</button>
@@ -263,7 +278,8 @@ function renderRand(results) {
         <button class="mini" data-rgen="${i}">生成图片</button>
         <span class="status" data-rstatus="${i}"></span>
       </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
   $('#randOut').dataset.results = JSON.stringify(results.map(r => ({ str: r.str, tags: r.tags })));
 }
 function getRand(i) { return JSON.parse($('#randOut').dataset.results)[i]; }
@@ -692,6 +708,8 @@ mergeArtists();
 $('#libCat').innerHTML = '<option value="">全部分类</option>' +
   (window.ARTIST_CATS || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 renderChips();
+$('#rStyle').innerHTML = '<option value="">不限</option>' +
+  (window.ARTIST_CATS || []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 renderLibrary();
 bindFmt(); bindRnd(); bindSettings();
 renderMixer();

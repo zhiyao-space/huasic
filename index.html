@@ -26,7 +26,7 @@
       <button class="navbtn" data-page="records">画串录 <span class="navhint" id="navRecCount"></span></button>
       <button class="navbtn" data-page="settings">API 设置</button>
     </nav>
-    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261107d-models</span></div>
+    <div class="navfoot">纯前端 · 数据存本地<br>Danbooru 画师串<br><span id="verMark">build v20261108a-style</span></div>
   </aside>
 
   <main id="main">
@@ -86,6 +86,12 @@
                   <option value="sel">已选</option>
                 </select>
               </label>
+            </div>
+            <div class="frow4">
+              <label>画风定向
+                <select id="rStyle"><option value="">不限</option></select>
+              </label>
+              <label>风格关键词<input id="rKey" placeholder="水感 / 暗调 / 机甲…"></label>
             </div>
             <div class="frow">
               <label class="check"><input id="rAuto" type="checkbox"> 逐条自动生成图片</label>
